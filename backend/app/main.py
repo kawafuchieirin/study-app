@@ -24,6 +24,11 @@ class TaskUpdate(BaseModel):
     completed: bool
 
 
+class Reflection(BaseModel):
+    content: str = Field(min_length=1, max_length=3000)
+    mood: Literal["low", "okay", "good"]
+
+
 class AiQuestion(BaseModel):
     user_id: str
     subject: str
@@ -86,6 +91,35 @@ def update_task(task_id: str, payload: TaskUpdate, request: Request):
 def delete_task(task_id: str, request: Request):
     user_id = current_user_id(request)
     table.delete_item(Key={"pk": f"USER#{user_id}", "sk": task_id})
+
+
+@app.get("/reflections")
+def list_reflections(request: Request):
+    user_id = current_user_id(request)
+    response = table.query(
+        KeyConditionExpression="pk = :pk AND begins_with(sk, :sk)",
+        ExpressionAttributeValues={":pk": f"USER#{user_id}", ":sk": "REFLECTION#"},
+        ScanIndexForward=False,
+        Limit=30,
+    )
+    return {"items": response.get("Items", [])}
+
+
+@app.put("/reflections/{reflection_date}")
+def save_reflection(reflection_date: date, payload: Reflection, request: Request):
+    user_id = current_user_id(request)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    item = {
+        "pk": f"USER#{user_id}",
+        "sk": f"REFLECTION#{reflection_date.isoformat()}",
+        "type": "reflection",
+        "date": reflection_date.isoformat(),
+        "content": payload.content,
+        "mood": payload.mood,
+        "updated_at": timestamp,
+    }
+    table.put_item(Item=item)
+    return item
 
 
 @app.post("/ai/explain")
