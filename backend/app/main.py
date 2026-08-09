@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from typing import Literal
 
 import boto3
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from mangum import Mangum
 from pydantic import BaseModel, Field
 
@@ -14,11 +14,14 @@ table = boto3.resource("dynamodb").Table(table_name)
 
 
 class StudyTask(BaseModel):
-    user_id: str
     title: str = Field(min_length=1, max_length=120)
     subject: str
     scheduled_for: datetime
     duration_minutes: int = Field(gt=0, le=480)
+
+
+class TaskUpdate(BaseModel):
+    completed: bool
 
 
 class AiQuestion(BaseModel):
@@ -39,12 +42,50 @@ def dashboard(user_id: str):
     return {"items": response.get("Items", [])}
 
 
+def current_user_id(request: Request) -> str:
+    try:
+        return request.scope["aws.event"]["requestContext"]["authorizer"]["jwt"]["claims"]["sub"]
+    except KeyError as exc:
+        raise HTTPException(status_code=401, detail="ログインが必要です") from exc
+
+
+@app.get("/tasks")
+def list_tasks(request: Request):
+    user_id = current_user_id(request)
+    response = table.query(
+        KeyConditionExpression="pk = :pk AND begins_with(sk, :sk)",
+        ExpressionAttributeValues={":pk": f"USER#{user_id}", ":sk": "TASK#"},
+        ScanIndexForward=True,
+    )
+    return {"items": response.get("Items", [])}
+
+
 @app.post("/tasks", status_code=201)
-def create_task(task: StudyTask):
+def create_task(task: StudyTask, request: Request):
+    user_id = current_user_id(request)
     timestamp = datetime.now(timezone.utc).isoformat()
-    item = {"pk": f"USER#{task.user_id}", "sk": f"TASK#{timestamp}", "type": "task", **task.model_dump(mode="json"), "completed": False}
+    item = {"pk": f"USER#{user_id}", "sk": f"TASK#{timestamp}", "type": "task", **task.model_dump(mode="json"), "completed": False}
     table.put_item(Item=item)
     return item
+
+
+@app.patch("/tasks/{task_id}")
+def update_task(task_id: str, payload: TaskUpdate, request: Request):
+    user_id = current_user_id(request)
+    response = table.update_item(
+        Key={"pk": f"USER#{user_id}", "sk": task_id},
+        UpdateExpression="SET completed = :completed",
+        ExpressionAttributeValues={":completed": payload.completed},
+        ConditionExpression="attribute_exists(pk)",
+        ReturnValues="ALL_NEW",
+    )
+    return response["Attributes"]
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: str, request: Request):
+    user_id = current_user_id(request)
+    table.delete_item(Key={"pk": f"USER#{user_id}", "sk": task_id})
 
 
 @app.post("/ai/explain")

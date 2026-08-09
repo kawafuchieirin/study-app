@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AuthUser, beginSignIn, finishSignIn, signOut } from "./cognito-auth";
+import { AuthUser, accessToken, beginSignIn, finishSignIn, signOut } from "./cognito-auth";
 
 type Tab = "home" | "plan" | "review" | "notes" | "mistakes";
 
-const tasks = [
-  { time: "07:30", title: "英単語 50語", meta: "英語 · 25分", tone: "blue", done: true },
-  { time: "19:00", title: "二次関数｜応用問題", meta: "数学 · 45分", tone: "coral", done: false },
-  { time: "20:00", title: "世界史：産業革命", meta: "世界史 · 30分", tone: "mint", done: false },
-];
+type StudyTask = { sk: string; title: string; subject: string; scheduled_for: string; duration_minutes: number; completed: boolean };
+const apiUrl = "https://i0iik19kf1.execute-api.ap-northeast-1.amazonaws.com";
 
 const weakGroups = [
   { title: "場合分けの見落とし", subject: "数学", count: 6, color: "coral" },
@@ -19,21 +16,66 @@ const weakGroups = [
 
 export default function Home() {
   const [active, setActive] = useState<Tab>("home");
-  const [checked, setChecked] = useState([true, false, false]);
+  const [tasks, setTasks] = useState<StudyTask[]>([]);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [taskError, setTaskError] = useState("");
+  const [taskForm, setTaskForm] = useState({ title: "", subject: "", scheduled_for: "", duration_minutes: "30" });
   const [aiOpen, setAiOpen] = useState(false);
   const [reflection, setReflection] = useState("");
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
-  const completed = checked.filter(Boolean).length;
-  const progress = Math.round((completed / checked.length) * 100);
+  const completed = tasks.filter((task) => task.completed).length;
+  const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   const today = useMemo(() => new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "short" }).format(new Date()), []);
 
   useEffect(() => {
-    finishSignIn().then(setAuthUser).catch((error: Error) => setAuthError(error.message)).finally(() => setAuthLoading(false));
+    finishSignIn().then(async (user) => {
+      setAuthUser(user);
+      if (user) await loadTasks();
+    }).catch((error: Error) => setAuthError(error.message)).finally(() => setAuthLoading(false));
   }, []);
 
-  const toggle = (index: number) => setChecked((current) => current.map((value, i) => i === index ? !value : value));
+  const api = async (path: string, init?: RequestInit) => {
+    const token = accessToken();
+    if (!token) throw new Error("予定を保存するにはログインしてください。");
+    const response = await fetch(`${apiUrl}${path}`, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } });
+    if (!response.ok) throw new Error(response.status === 401 ? "ログインの有効期限が切れました。再ログインしてください。" : "予定を保存できませんでした。");
+    return response.status === 204 ? null : response.json();
+  };
+
+  const loadTasks = async () => {
+    const data = await api("/tasks");
+    setTasks(data.items ?? []);
+  };
+
+  const openTaskForm = () => {
+    if (!authUser) { beginSignIn(); return; }
+    const nextHour = new Date(Date.now() + 60 * 60 * 1000);
+    setTaskForm({ title: "", subject: "", scheduled_for: new Date(nextHour.getTime() - nextHour.getTimezoneOffset() * 60000).toISOString().slice(0, 16), duration_minutes: "30" });
+    setTaskError("");
+    setTaskFormOpen(true);
+  };
+
+  const createTask = async (event: React.FormEvent) => {
+    event.preventDefault(); setTaskBusy(true); setTaskError("");
+    try {
+      const created = await api("/tasks", { method: "POST", body: JSON.stringify({ ...taskForm, duration_minutes: Number(taskForm.duration_minutes), scheduled_for: new Date(taskForm.scheduled_for).toISOString() }) });
+      setTasks((current) => [...current, created].sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for)));
+      setTaskFormOpen(false);
+    } catch (error) { setTaskError((error as Error).message); } finally { setTaskBusy(false); }
+  };
+
+  const toggleTask = async (task: StudyTask) => {
+    const updated = await api(`/tasks/${encodeURIComponent(task.sk)}`, { method: "PATCH", body: JSON.stringify({ completed: !task.completed }) });
+    setTasks((current) => current.map((item) => item.sk === task.sk ? updated : item));
+  };
+
+  const deleteTask = async (task: StudyTask) => {
+    await api(`/tasks/${encodeURIComponent(task.sk)}`, { method: "DELETE" });
+    setTasks((current) => current.filter((item) => item.sk !== task.sk));
+  };
 
   return (
     <main className="app-shell">
@@ -55,16 +97,16 @@ export default function Home() {
       <section className="content">
         <header className="topbar">
           <div><p>{today}</p><h1>{authUser ? `おかえりなさい、${authUser.name}さん。` : "あなたの学びを、今日も一歩。"}</h1>{authError && <p className="auth-error">{authError}</p>}</div>
-          <div className="top-actions"><button className="auth-button" disabled={authLoading} onClick={() => authUser ? signOut() : beginSignIn()}>{authLoading ? "確認中…" : authUser ? "ログアウト" : "ログイン"}</button><button className="icon-button" aria-label="通知">♢<i /></button><button className="primary" onClick={() => setActive("plan")}>＋ 今日の予定を追加</button></div>
+          <div className="top-actions"><button className="auth-button" disabled={authLoading} onClick={() => authUser ? signOut() : beginSignIn()}>{authLoading ? "確認中…" : authUser ? "ログアウト" : "ログイン"}</button><button className="icon-button" aria-label="通知">♢<i /></button><button className="primary" onClick={openTaskForm}>＋ 今日の予定を追加</button></div>
         </header>
 
         <section className="hero-grid">
           <article className="focus-card">
             <div className="eyebrow">TODAY&apos;S FOCUS</div>
             <h2>今日やることを、<br />ひとつずつ。</h2>
-            <p>計画の <strong>{completed}/{checked.length}</strong> が完了しました。いいペースです。</p>
+            <p>計画の <strong>{completed}/{tasks.length}</strong> が完了しました。いいペースです。</p>
             <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
-            <div className="progress-label"><span>{progress}% 完了</span><span>残り {checked.length - completed} タスク</span></div>
+            <div className="progress-label"><span>{progress}% 完了</span><span>残り {tasks.length - completed} タスク</span></div>
             <div className="orbit" aria-hidden="true"><span className="orbit-number">{progress}</span><small>%</small></div>
           </article>
           <article className="week-card">
@@ -76,9 +118,9 @@ export default function Home() {
 
         <section className="lower-grid">
           <article className="panel schedule-panel">
-            <div className="panel-title"><div><span className="section-icon coral">□</span><div><h3>今日のスケジュール</h3><p>予定に沿って進めよう</p></div></div><button onClick={() => setActive("plan")}>すべて見る</button></div>
-            <div className="task-list">{tasks.map((task, index) => <button type="button" className={`task ${checked[index] ? "is-done" : ""}`} key={task.title} onClick={()=>toggle(index)}><time>{task.time}</time><span className={`task-dot ${task.tone}`}>{checked[index] ? "✓" : ""}</span><span className="task-copy"><strong>{task.title}</strong><small>{task.meta}</small></span><b>›</b></button>)}</div>
-            <button className="add-task" onClick={() => setActive("plan")}>＋ タスクを追加する</button>
+            <div className="panel-title"><div><span className="section-icon coral">□</span><div><h3>学習スケジュール</h3><p>追加・完了・削除が保存されます</p></div></div></div>
+            <div className="task-list">{tasks.length === 0 && <p className="empty-tasks">{authUser ? "予定はまだありません。最初の予定を追加しましょう。" : "ログインすると予定を作成できます。"}</p>}{tasks.map((task) => <div className={`task ${task.completed ? "is-done" : ""}`} key={task.sk}><button type="button" className="task-main" onClick={()=>toggleTask(task)}><time>{new Date(task.scheduled_for).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"})}</time><span className="task-dot coral">{task.completed ? "✓" : ""}</span><span className="task-copy"><strong>{task.title}</strong><small>{task.subject} · {task.duration_minutes}分</small></span></button><button className="delete-task" aria-label={`${task.title}を削除`} onClick={()=>deleteTask(task)}>×</button></div>)}</div>
+            <button className="add-task" onClick={openTaskForm}>＋ タスクを追加する</button>
           </article>
 
           <article className="panel ai-panel">
@@ -99,6 +141,7 @@ export default function Home() {
           </article>
         </section>
       </section>
+      {taskFormOpen && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setTaskFormOpen(false)}><form className="task-modal" onSubmit={createTask}><div className="modal-heading"><div><small>STUDY PLAN</small><h2>学習予定を追加</h2></div><button type="button" aria-label="閉じる" onClick={()=>setTaskFormOpen(false)}>×</button></div><label>やること<input required maxLength={120} value={taskForm.title} onChange={(e)=>setTaskForm({...taskForm,title:e.target.value})} placeholder="例：英単語を50語覚える" autoFocus /></label><label>科目<input required value={taskForm.subject} onChange={(e)=>setTaskForm({...taskForm,subject:e.target.value})} placeholder="例：英語" /></label><div className="form-row"><label>開始日時<input required type="datetime-local" value={taskForm.scheduled_for} onChange={(e)=>setTaskForm({...taskForm,scheduled_for:e.target.value})} /></label><label>学習時間（分）<input required type="number" min="1" max="480" value={taskForm.duration_minutes} onChange={(e)=>setTaskForm({...taskForm,duration_minutes:e.target.value})} /></label></div>{taskError && <p className="form-error">{taskError}</p>}<div className="modal-actions"><button type="button" onClick={()=>setTaskFormOpen(false)}>キャンセル</button><button className="primary" disabled={taskBusy}>{taskBusy ? "保存中…" : "予定を保存"}</button></div></form></div>}
     </main>
   );
 }

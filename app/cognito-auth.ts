@@ -22,6 +22,10 @@ export function currentUser(): AuthUser | null {
   } catch { return null; }
 }
 
+export function accessToken(): string | null {
+  return sessionStorage.getItem(accessTokenKey);
+}
+
 export async function beginSignIn() {
   const verifier = randomValue();
   const state = randomValue();
