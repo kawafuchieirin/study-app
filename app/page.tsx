@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AuthUser, beginSignIn, finishSignIn, signOut } from "./cognito-auth";
 
 type Tab = "home" | "plan" | "review" | "notes" | "mistakes";
 
@@ -21,9 +22,16 @@ export default function Home() {
   const [checked, setChecked] = useState([true, false, false]);
   const [aiOpen, setAiOpen] = useState(false);
   const [reflection, setReflection] = useState("");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const completed = checked.filter(Boolean).length;
   const progress = Math.round((completed / checked.length) * 100);
   const today = useMemo(() => new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "short" }).format(new Date()), []);
+
+  useEffect(() => {
+    finishSignIn().then(setAuthUser).catch((error: Error) => setAuthError(error.message)).finally(() => setAuthLoading(false));
+  }, []);
 
   const toggle = (index: number) => setChecked((current) => current.map((value, i) => i === index ? !value : value));
 
@@ -40,14 +48,14 @@ export default function Home() {
         </nav>
         <div className="sidebar-bottom">
           <div className="streak"><span>🔥</span><div><strong>12日連続</strong><small>学習を継続中</small></div></div>
-          <button className="profile" type="button"><span className="avatar">結</span><span><strong>結城 まな</strong><small>高校2年生</small></span><b>···</b></button>
+          <button className="profile" type="button" onClick={() => authUser ? signOut() : beginSignIn()}><span className="avatar">{authUser?.name.slice(0, 1) ?? "M"}</span><span><strong>{authUser?.name ?? "ゲスト"}</strong><small>{authUser?.email ?? "サインインしてください"}</small></span><b>···</b></button>
         </div>
       </aside>
 
       <section className="content">
         <header className="topbar">
-          <div><p>{today}</p><h1>おかえりなさい、まなさん。</h1></div>
-          <div className="top-actions"><button className="icon-button" aria-label="通知">♢<i /></button><button className="primary" onClick={() => setActive("plan")}>＋ 今日の予定を追加</button></div>
+          <div><p>{today}</p><h1>{authUser ? `おかえりなさい、${authUser.name}さん。` : "あなたの学びを、今日も一歩。"}</h1>{authError && <p className="auth-error">{authError}</p>}</div>
+          <div className="top-actions"><button className="auth-button" disabled={authLoading} onClick={() => authUser ? signOut() : beginSignIn()}>{authLoading ? "確認中…" : authUser ? "ログアウト" : "ログイン"}</button><button className="icon-button" aria-label="通知">♢<i /></button><button className="primary" onClick={() => setActive("plan")}>＋ 今日の予定を追加</button></div>
         </header>
 
         <section className="hero-grid">

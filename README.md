@@ -44,3 +44,30 @@ terraform apply
 - AWSリソース: Cognito、DynamoDB、Lambda、API Gateway、IAM、CloudWatch Logs
 
 `production` EnvironmentにRequired reviewersを設定すると、本番apply前にGitHub上で承認できます。
+
+## サインイン
+
+本番環境ではAmazon CognitoのAuthorization Code Flowを使用します。
+
+| 項目 | 値 |
+| --- | --- |
+| AWSリージョン | `ap-northeast-1` |
+| User Pool ID | `ap-northeast-1_X2bwaJNLW` |
+| App Client ID | `5p8bb519mo27r6m5b0pm0ekp8o` |
+| Cognitoドメイン | `https://manabi-prod-154931139855.auth.ap-northeast-1.amazoncognito.com` |
+| Callback URL | `https://manabi-study.k06en23.chatgpt.site` |
+| API URL | `https://i0iik19kf1.execute-api.ap-northeast-1.amazonaws.com` |
+
+- [サインイン／新規登録](https://manabi-prod-154931139855.auth.ap-northeast-1.amazoncognito.com/oauth2/authorize?client_id=5p8bb519mo27r6m5b0pm0ekp8o&response_type=code&scope=openid+email+profile&redirect_uri=https%3A%2F%2Fmanabi-study.k06en23.chatgpt.site)
+- [サインアウト](https://manabi-prod-154931139855.auth.ap-northeast-1.amazoncognito.com/logout?client_id=5p8bb519mo27r6m5b0pm0ekp8o&logout_uri=https%3A%2F%2Fmanabi-study.k06en23.chatgpt.site)
+
+フロントエンド用の環境変数は次のとおりです。
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://i0iik19kf1.execute-api.ap-northeast-1.amazonaws.com
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=ap-northeast-1_X2bwaJNLW
+NEXT_PUBLIC_COGNITO_CLIENT_ID=5p8bb519mo27r6m5b0pm0ekp8o
+NEXT_PUBLIC_COGNITO_DOMAIN=https://manabi-prod-154931139855.auth.ap-northeast-1.amazoncognito.com
+```
+
+パスワード、アクセストークン、AWSアクセスキーはREADMEやGitへ保存しないでください。React側ではPKCE付きAuthorization Code Flowを使用し、トークンはブラウザのセッションストレージにのみ保持します。

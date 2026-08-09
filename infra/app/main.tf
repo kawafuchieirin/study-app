@@ -53,8 +53,8 @@ resource "aws_cognito_user_pool_client" "web" {
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email", "profile"]
-  callback_urls                        = [var.frontend_url]
-  logout_urls                          = [var.frontend_url]
+  callback_urls                        = [var.frontend_url, "http://localhost:3000"]
+  logout_urls                          = [var.frontend_url, "http://localhost:3000"]
   supported_identity_providers         = ["COGNITO"]
 }
 
@@ -98,7 +98,7 @@ resource "aws_apigatewayv2_api" "main" {
   name          = "${local.name}-api"
   protocol_type = "HTTP"
   cors_configuration {
-    allow_origins = [var.frontend_url]
+    allow_origins = [var.frontend_url, "http://localhost:3000"]
     allow_headers = ["authorization", "content-type"]
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   }
