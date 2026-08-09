@@ -13,9 +13,19 @@ variable "github_owner" {
   default = "kawafuchieirin"
 }
 
+variable "github_owner_id" {
+  type    = string
+  default = "127044338"
+}
+
 variable "github_repository" {
   type    = string
   default = "study-app"
+}
+
+variable "github_repository_id" {
+  type    = string
+  default = "1328406722"
 }
 
 variable "github_branch" {
