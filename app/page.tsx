@@ -2,18 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AuthUser, accessToken, beginSignIn, finishSignIn, signOut } from "./cognito-auth";
+import { FeatureWorkspace } from "./feature-workspaces";
 
 type Tab = "home" | "plan" | "review" | "notes" | "mistakes";
 
 type StudyTask = { sk: string; title: string; subject: string; scheduled_for: string; duration_minutes: number; completed: boolean };
 type Reflection = { sk: string; date: string; content: string; mood: "low" | "okay" | "good"; updated_at: string };
 const apiUrl = "https://i0iik19kf1.execute-api.ap-northeast-1.amazonaws.com";
-
-const weakGroups = [
-  { title: "場合分けの見落とし", subject: "数学", count: 6, color: "coral" },
-  { title: "時制の一致", subject: "英語", count: 4, color: "blue" },
-  { title: "年代の前後関係", subject: "世界史", count: 3, color: "mint" },
-];
 
 export default function Home() {
   const [active, setActive] = useState<Tab>("home");
@@ -78,8 +73,10 @@ export default function Home() {
   };
 
   const selectTab = (tab: Tab) => {
+    if (tab === "home") { setActive(tab); return; }
+    if (tab === "plan") { openTaskForm(); return; }
+    if (tab === "review") { setActive(tab); setHistoryOpen(true); return; }
     setActive(tab);
-    if (tab === "review") setHistoryOpen(true);
   };
 
   const openTaskForm = () => {
@@ -157,12 +154,12 @@ export default function Home() {
 
           <article className="panel ai-panel">
             <div className="ai-title"><span className="spark">✦</span><div><small>MANABI AI</small><h3>わからないを、そのままにしない。</h3></div></div>
-            {!aiOpen ? <><p>つまずいた問題を送ると、あなたの理解度に合わせてAIが解説します。</p><div className="ai-example"><span>数学</span><p>「なぜここで場合分けが必要なの？」</p></div><button className="ai-button" onClick={()=>setAiOpen(true)}>AIに質問する <span>→</span></button></> : <div className="ai-chat"><p className="bubble user">なぜここで場合分けが必要なの？</p><p className="bubble bot"><b>✦ Manabi AI</b><br/>x の符号によって式の意味が変わるからです。まず「x ≥ 0」と「x &lt; 0」の2つに分けて、同じルールが使えるか確認しましょう。</p><button onClick={()=>setAiOpen(false)}>閉じる</button></div>}
+            <p>問題文やつまずいた箇所を送ると、考え方を3段階で解説し、確認問題まで作ります。</p><div className="ai-example"><span>回答は履歴に保存</span><p>いつでも戻って復習できます。</p></div><button className="ai-button" onClick={()=>setAiOpen(true)}>AIに質問する <span>→</span></button>
           </article>
 
           <article className="panel weak-panel">
-            <div className="panel-title"><div><span className="section-icon blue">◇</span><div><h3>苦手を見つける</h3><p>間違いから、次の一歩へ</p></div></div><button onClick={() => setActive("mistakes")}>すべて見る</button></div>
-            <div className="weak-list">{weakGroups.map(group=><button type="button" key={group.title}><span className={`folder ${group.color}`}>⌁</span><span><strong>{group.title}</strong><small>{group.subject} · {group.count}問</small></span><b>›</b></button>)}</div>
+            <div className="panel-title"><div><span className="section-icon blue">◇</span><div><h3>苦手を見つける</h3><p>間違いから、次の一歩へ</p></div></div><button onClick={() => setActive("mistakes")}>開く</button></div>
+            <div className="weak-list"><button type="button" onClick={()=>setActive("mistakes")}><span className="folder coral">⌁</span><span><strong>できなかった問題を登録</strong><small>科目・単元ごとに自動整理</small></span><b>›</b></button><button type="button" onClick={()=>setActive("notes")}><span className="folder blue">≡</span><span><strong>要点ノートを作る</strong><small>検索・編集・タグ付けに対応</small></span><b>›</b></button></div>
           </article>
 
           <article className="panel reflection-panel">
@@ -175,6 +172,8 @@ export default function Home() {
       </section>
       {taskFormOpen && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setTaskFormOpen(false)}><form className="task-modal" onSubmit={createTask}><div className="modal-heading"><div><small>STUDY PLAN</small><h2>学習予定を追加</h2></div><button type="button" aria-label="閉じる" onClick={()=>setTaskFormOpen(false)}>×</button></div><label>やること<input required maxLength={120} value={taskForm.title} onChange={(e)=>setTaskForm({...taskForm,title:e.target.value})} placeholder="例：英単語を50語覚える" autoFocus /></label><label>科目<input required value={taskForm.subject} onChange={(e)=>setTaskForm({...taskForm,subject:e.target.value})} placeholder="例：英語" /></label><div className="form-row"><label>開始日時<input required type="datetime-local" value={taskForm.scheduled_for} onChange={(e)=>setTaskForm({...taskForm,scheduled_for:e.target.value})} /></label><label>学習時間（分）<input required type="number" min="1" max="480" value={taskForm.duration_minutes} onChange={(e)=>setTaskForm({...taskForm,duration_minutes:e.target.value})} /></label></div>{taskError && <p className="form-error">{taskError}</p>}<div className="modal-actions"><button type="button" onClick={()=>setTaskFormOpen(false)}>キャンセル</button><button className="primary" disabled={taskBusy}>{taskBusy ? "保存中…" : "予定を保存"}</button></div></form></div>}
       {historyOpen && <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setHistoryOpen(false)}><section className="task-modal history-modal"><div className="modal-heading"><div><small>REFLECTION HISTORY</small><h2>振り返り履歴</h2></div><button type="button" aria-label="閉じる" onClick={()=>setHistoryOpen(false)}>×</button></div>{!authUser ? <div className="history-empty"><p>履歴を見るにはログインしてください。</p><button className="primary" onClick={()=>beginSignIn()}>ログイン</button></div> : reflections.length === 0 ? <p className="history-empty">保存された振り返りはまだありません。</p> : <div className="history-list">{reflections.map((item)=><article key={item.sk}><div><time>{new Date(`${item.date}T00:00:00`).toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"})}</time><span>{item.mood === "good" ? "◎" : item.mood === "okay" ? "○" : "△"}</span></div><p>{item.content}</p></article>)}</div>}</section></div>}
+      {(active === "notes" || active === "mistakes") && <FeatureWorkspace mode={active} signedIn={Boolean(authUser)} onClose={()=>setActive("home")} />}
+      {aiOpen && <FeatureWorkspace mode="ai" signedIn={Boolean(authUser)} onClose={()=>setAiOpen(false)} />}
     </main>
   );
 }
