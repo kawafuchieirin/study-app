@@ -100,7 +100,7 @@ resource "aws_apigatewayv2_api" "main" {
   cors_configuration {
     allow_origins = [var.frontend_url, "http://localhost:3000"]
     allow_headers = ["authorization", "content-type"]
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   }
 }
 
@@ -128,6 +128,16 @@ resource "aws_apigatewayv2_route" "default" {
   target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
+}
+
+# Browsers send an unauthenticated CORS preflight before authenticated API
+# requests. Without this explicit route, the JWT-protected $default route
+# rejects OPTIONS before API Gateway can return the configured CORS headers.
+resource "aws_apigatewayv2_route" "cors_preflight" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "OPTIONS /{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+  authorization_type = "NONE"
 }
 
 resource "aws_apigatewayv2_stage" "default" {

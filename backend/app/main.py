@@ -7,8 +7,19 @@ import boto3
 from fastapi import FastAPI, HTTPException, Request
 from mangum import Mangum
 from pydantic import BaseModel, Field
+from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Manabi API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://manabi-study.k06en23.chatgpt.site",
+        "http://localhost:3000",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["authorization", "content-type"],
+)
 table_name = os.getenv("TABLE_NAME", "manabi-items")
 table = boto3.resource("dynamodb").Table(table_name)
 
