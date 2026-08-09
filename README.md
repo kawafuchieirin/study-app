@@ -18,6 +18,16 @@ pnpm install
 pnpm dev
 ```
 
+開発サーバーではViteのHMR（Hot Module Replacement）とReact Fast Refreshが有効です。`app/` 配下のReact、TypeScript、CSSを保存すると、ブラウザを手動更新せずに変更が反映され、可能な限り入力中の画面状態も維持されます。
+
+同じネットワーク内の別端末から確認する場合は、次を使用します。
+
+```bash
+pnpm dev:host
+```
+
+通常は `http://localhost:3000` を開いて開発します。CognitoにもこのURLをログイン後の戻り先として登録済みです。
+
 ## AWSへの初回セットアップ
 
 GitHub ActionsはOIDCでAWSへ接続するため、長期アクセスキーは不要です。最初に一度だけ管理者権限を持つローカルAWSプロファイルでbootstrapを実行します。

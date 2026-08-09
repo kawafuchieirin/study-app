@@ -44,9 +44,14 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      // Keep React Fast Refresh enabled and fall back to polling where native
+      // filesystem events are unavailable (for example, sandboxed previews).
+      hmr: true,
+      watch: isCodexSeatbeltSandbox
+        ? { useFsEvents: false, usePolling: true, interval: 200 }
+        : undefined,
+    },
     plugins: [
       vinext(),
       sites(),
