@@ -15,6 +15,8 @@ export function FeatureWorkspace({ mode, signedIn, onClose }: { mode: Mode; sign
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Note | null>(null);
+  const [preview, setPreview] = useState(false);
+  const [viewing, setViewing] = useState<Note | null>(null);
   const [note, setNote] = useState({ title: "", subject: "", content: "", tags: "" });
   const [mistake, setMistake] = useState({ subject: "", topic: "", question: "", cause: "" });
   const [question, setQuestion] = useState({ subject: "", question: "" });
@@ -76,15 +78,49 @@ export function FeatureWorkspace({ mode, signedIn, onClose }: { mode: Mode; sign
   return <div className="workspace-backdrop"><section className="feature-workspace">
     <header className="workspace-header"><div><small>MANABI WORKSPACE</small><h2>{titles[mode][0]}</h2><p>{titles[mode][1]}</p></div><button aria-label="閉じる" onClick={onClose}>×</button></header>
     {!signedIn ? <div className="workspace-signin"><p>この機能を利用するにはログインしてください。データは利用者ごとに安全に保存されます。</p><button onClick={()=>beginSignIn()}>ログインして続ける</button></div> : <>
-      {mode === "notes" && <form className="feature-form" onSubmit={saveNote}><div className="form-row"><label>タイトル<input required value={note.title} onChange={(e)=>setNote({...note,title:e.target.value})} /></label><label>科目<input required value={note.subject} onChange={(e)=>setNote({...note,subject:e.target.value})} /></label></div><label>要点<textarea required value={note.content} onChange={(e)=>setNote({...note,content:e.target.value})} placeholder="重要な考え方を、自分の言葉でまとめましょう" /></label><label>タグ<input value={note.tags} onChange={(e)=>setNote({...note,tags:e.target.value})} placeholder="公式、テスト対策（読点区切り）" /></label><div className="feature-actions">{editing && <button type="button" onClick={()=>{setEditing(null);setNote({title:"",subject:"",content:"",tags:""})}}>編集をやめる</button>}<button disabled={busy}>{busy ? "保存中…" : editing ? "更新する" : "ノートを保存"}</button></div></form>}
+      {mode === "notes" && <form className="feature-form" onSubmit={saveNote}><div className="form-row"><label>タイトル<input required value={note.title} onChange={(e)=>setNote({...note,title:e.target.value})} /></label><label>科目<input required value={note.subject} onChange={(e)=>setNote({...note,subject:e.target.value})} /></label></div><div className="markdown-label"><span>要点（Markdown対応・文章をそのまま貼り付けできます）</span><button type="button" onClick={()=>setPreview(!preview)}>{preview ? "編集に戻る" : "プレビュー"}</button></div>{preview ? <div className="markdown-preview"><MarkdownContent content={note.content} /></div> : <textarea className="note-editor" required value={note.content} onChange={(e)=>setNote({...note,content:e.target.value})} placeholder={"**全体的な説明**\nここに説明を貼り付けます。\n\n**問われている要件**\n- 要件1\n- 要件2"} />}<label>タグ<input value={note.tags} onChange={(e)=>setNote({...note,tags:e.target.value})} placeholder="AWS、Bedrock、試験対策（読点区切り）" /></label><div className="feature-actions">{editing && <button type="button" onClick={()=>{setEditing(null);setNote({title:"",subject:"",content:"",tags:""})}}>編集をやめる</button>}<button disabled={busy}>{busy ? "保存中…" : editing ? "更新する" : "ノートを保存"}</button></div></form>}
       {mode === "mistakes" && <form className="feature-form" onSubmit={saveMistake}><div className="form-row"><label>科目<input required value={mistake.subject} onChange={(e)=>setMistake({...mistake,subject:e.target.value})} placeholder="数学" /></label><label>単元・つまずき<input required value={mistake.topic} onChange={(e)=>setMistake({...mistake,topic:e.target.value})} placeholder="場合分け" /></label></div><label>できなかった問題<textarea required value={mistake.question} onChange={(e)=>setMistake({...mistake,question:e.target.value})} /></label><label>原因・気づき<input value={mistake.cause} onChange={(e)=>setMistake({...mistake,cause:e.target.value})} placeholder="条件を読み落とした" /></label><div className="feature-actions"><button disabled={busy}>{busy ? "登録中…" : "苦手問題に追加"}</button></div></form>}
       {mode === "ai" && <form className="feature-form ai-question-form" onSubmit={askAi}><label>科目<input required value={question.subject} onChange={(e)=>setQuestion({...question,subject:e.target.value})} placeholder="数学" /></label><label>わからない問題・質問<textarea required minLength={3} value={question.question} onChange={(e)=>setQuestion({...question,question:e.target.value})} placeholder="問題文や、どこでわからなくなったかを入力してください" /></label><div className="feature-actions"><button disabled={busy}>{busy ? "解説を作成中…" : "AIに解説してもらう"}</button></div></form>}
       {error && <p className="workspace-error">{error}</p>}
       <div className="workspace-tools"><h3>{mode === "ai" ? "質問履歴" : mode === "notes" ? "保存したノート" : "自動グルーピング"}</h3><input aria-label="検索" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="検索…" /></div>
-      {mode === "notes" && <div className="note-grid">{filtered.map((raw)=><article key={raw.sk} className="note-card">{(()=>{const item=raw as Note;return <><small>{item.subject}</small><h3>{item.title}</h3><p>{item.content}</p><div className="tag-row">{item.tags.map(tag=><span key={tag}>{tag}</span>)}</div><footer><button onClick={()=>editNote(item)}>編集</button><button onClick={()=>removeNote(item)}>削除</button></footer></>})()}</article>)}</div>}
+      {mode === "notes" && <div className="note-grid">{filtered.map((raw)=><article key={raw.sk} className="note-card">{(()=>{const item=raw as Note;return <><small>{item.subject}</small><h3>{item.title}</h3><p>{item.content.replace(/[*#>`_-]/g, "")}</p><div className="tag-row">{item.tags.map(tag=><span key={tag}>{tag}</span>)}</div><footer><button onClick={()=>setViewing(item)}>全文を表示</button><button onClick={()=>editNote(item)}>編集</button><button onClick={()=>removeNote(item)}>削除</button></footer></>})()}</article>)}</div>}
       {mode === "mistakes" && <div className="mistake-groups">{grouped.map(([group, entries])=><section key={group}><h3>{group}<span>{entries.filter(item=>!item.mastered).length}問を復習</span></h3>{entries.map(item=><article className={item.mastered?"mastered":""} key={item.sk}><div><p>{item.question}</p>{item.cause&&<small>原因：{item.cause}</small>}</div><button onClick={()=>toggleMistake(item)}>{item.mastered?"未習得に戻す":"理解できた"}</button><button aria-label="削除" onClick={()=>removeMistake(item)}>×</button></article>)}</section>)}</div>}
       {mode === "ai" && <div className="ai-history">{filtered.map((raw)=>{const item=raw as AiEntry;return <article key={item.sk}><div className="ai-history-question"><small>{item.subject}</small><p>{item.question}</p></div><div className="ai-history-answer"><b>✦ Manabi AI</b><p>{item.answer}</p></div></article>})}</div>}
       {filtered.length === 0 && <p className="workspace-empty">まだデータがありません。上のフォームから最初の1件を作成しましょう。</p>}
     </>}
+    {viewing && <div className="note-view-backdrop" onMouseDown={(event)=>event.target===event.currentTarget&&setViewing(null)}><article className="note-view"><header><div><small>{viewing.subject}</small><h2>{viewing.title}</h2></div><button aria-label="閉じる" onClick={()=>setViewing(null)}>×</button></header><MarkdownContent content={viewing.content} /><footer><div className="tag-row">{viewing.tags.map(tag=><span key={tag}>{tag}</span>)}</div><button onClick={()=>{editNote(viewing);setViewing(null)}}>編集する</button></footer></article></div>}
   </section></div>;
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
+  return <>{parts.map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2, -2)}</strong> : part.startsWith("`") && part.endsWith("`") ? <code key={index}>{part.slice(1, -1)}</code> : <span key={index}>{part}</span>)}</>;
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const nodes: React.ReactNode[] = [];
+  let inCode = false;
+  let code: string[] = [];
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith("```")) {
+      if (inCode) { nodes.push(<pre key={`code-${index}`}><code>{code.join("\n")}</code></pre>); code = []; }
+      inCode = !inCode; return;
+    }
+    if (inCode) { code.push(line); return; }
+    if (!line.trim()) { nodes.push(<div className="md-space" key={index} />); return; }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    const boldHeading = line.match(/^\*\*(.+)\*\*$/);
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    const numbered = line.match(/^(\d+)\.\s+(.+)$/);
+    const quote = line.match(/^>\s?(.+)$/);
+    if (heading) nodes.push(<h3 key={index}><InlineMarkdown text={heading[2]} /></h3>);
+    else if (boldHeading) nodes.push(<h3 key={index}>{boldHeading[1]}</h3>);
+    else if (bullet) nodes.push(<div className="md-list" key={index}><span>•</span><p><InlineMarkdown text={bullet[1]} /></p></div>);
+    else if (numbered) nodes.push(<div className="md-list" key={index}><span>{numbered[1]}.</span><p><InlineMarkdown text={numbered[2]} /></p></div>);
+    else if (quote) nodes.push(<blockquote key={index}><InlineMarkdown text={quote[1]} /></blockquote>);
+    else nodes.push(<p key={index}><InlineMarkdown text={line} /></p>);
+  });
+  if (code.length) nodes.push(<pre key="code-last"><code>{code.join("\n")}</code></pre>);
+  return <div className="markdown-content">{nodes}</div>;
 }
