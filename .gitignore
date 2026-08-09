@@ -42,3 +42,10 @@ __pycache__/
 /outputs/
 /work/
 /.pnpm-store/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/app/.build/
+backend/package/
+crash.log
